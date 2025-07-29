@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Check, X} from "lucide-react";
+import { Plus} from "lucide-react";
 
 interface Task {
   title: string;
