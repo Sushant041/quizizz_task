@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import ListComponent from './components/ListComponent';
 import { Sun, Moon } from 'lucide-react';
+
+interface Task {
+  title: string;
+  subtasks: Task[];
+}
 
 const App = () => {
   const [isDark, setIsDark] = useState(true);
