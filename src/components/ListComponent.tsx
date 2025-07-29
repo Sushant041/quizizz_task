@@ -1,191 +1,277 @@
-import React, { useState } from "react";
-import { Plus} from "lucide-react";
+import { useState } from 'react';
+import { Plus, CheckCircle2, Circle, ChevronDown, ChevronRight, Trash2, Edit3 } from 'lucide-react';
 
 interface Task {
+  id: string;
   title: string;
+  completed: boolean;
   subtasks: Task[];
+  isExpanded?: boolean;
 }
 
 interface ListComponentProps {
   tasks: Task[];
-  onTasksUpdate?: (updatedTasks: Task[]) => void;
-  level?: number;
-  isDark?: boolean;
+  onTasksUpdate: (tasks: Task[]) => void;
+  isDark: boolean;
 }
 
-const ListComponent: React.FC<ListComponentProps> = ({
-  tasks,
-  onTasksUpdate,
-  level = 0,
-  isDark = false,
-}) => {
-  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
-  const [inputVisible, setInputVisible] = useState<{ [key: number]: boolean }>(
-    {}
-  );
-  const [newSubtaskTitles, setNewSubtaskTitles] = useState<{
-    [key: number]: string;
-  }>({});
+const generateId = (): string => Math.random().toString(36).substr(2, 9);
 
-  const handleAddSubtask = (index: number) => {
-    setInputVisible((prev) => ({ ...prev, [index]: true }));
-  };
+const ListComponent: React.FC<ListComponentProps> = ({ tasks, onTasksUpdate, isDark }) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState<string>('');
 
-  const handleSubtaskChange = (index: number, value: string) => {
-    setNewSubtaskTitles((prev) => ({ ...prev, [index]: value }));
-  };
-
-  const handleSubmitSubtask = (index: number) => {
-    const updatedTasks = [...localTasks];
-    const newSubtaskTitle = newSubtaskTitles[index];
-
-    if (newSubtaskTitle.trim() === "") return;
-
-    updatedTasks[index].subtasks.push({
-      title: newSubtaskTitle.trim(),
-      subtasks: [],
+  const updateTask = (taskId: string, updates: Partial<Task>, taskList: Task[] = tasks): Task[] => {
+    return taskList.map(task => {
+      if (task.id === taskId) {
+        return { ...task, ...updates };
+      }
+      if (task.subtasks.length > 0) {
+        return { ...task, subtasks: updateTask(taskId, updates, task.subtasks) };
+      }
+      return task;
     });
+  };
 
-    setLocalTasks(updatedTasks);
-    setInputVisible((prev) => ({ ...prev, [index]: false }));
-    setNewSubtaskTitles((prev) => ({ ...prev, [index]: "" }));
+  const addSubtask = (parentId: string): void => {
+    const newTask = {
+      id: generateId(),
+      title: 'New subtask',
+      completed: false,
+      subtasks: [],
+      isExpanded: false
+    };
 
-    if (onTasksUpdate) {
-      onTasksUpdate(updatedTasks);
+    const addToParent = (taskList: Task[]): Task[] => {
+      return taskList.map(task => {
+        if (task.id === parentId) {
+          return { 
+            ...task, 
+            subtasks: [...task.subtasks, newTask],
+            isExpanded: true
+          };
+        }
+        if (task.subtasks.length > 0) {
+          return { ...task, subtasks: addToParent(task.subtasks) };
+        }
+        return task;
+      });
+    };
+
+    onTasksUpdate(addToParent(tasks));
+    setEditingId(newTask.id);
+    setEditText('New subtask');
+  };
+
+  const deleteTask = (taskId: string): void => {
+    const removeFromList = (taskList: Task[]): Task[] => {
+      return taskList.filter(task => task.id !== taskId).map(task => ({
+        ...task,
+        subtasks: removeFromList(task.subtasks)
+      }));
+    };
+    onTasksUpdate(removeFromList(tasks));
+  };
+
+  const startEditing = (task: Task): void => {
+    setEditingId(task.id);
+    setEditText(task.title);
+  };
+
+  const saveEdit = (taskId: string): void => {
+    if (editText.trim()) {
+      onTasksUpdate(updateTask(taskId, { title: editText.trim() }));
     }
+    setEditingId(null);
+    setEditText('');
   };
 
-  const handleCancelSubtask = (index: number) => {
-    setInputVisible((prev) => ({ ...prev, [index]: false }));
-    setNewSubtaskTitles((prev) => ({ ...prev, [index]: "" }));
-  };
+  interface TaskItemProps {
+    task: Task;
+    depth?: number;
+  }
 
-  const handleKeyPress = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSubmitSubtask(index);
-    } else if (e.key === 'Escape') {
-      handleCancelSubtask(index);
-    }
-  };
+  const TaskItem: React.FC<TaskItemProps> = ({ task, depth = 0 }) => {
+    const hasSubtasks = task.subtasks.length > 0;
+    const completedSubtasks = task.subtasks.filter(st => st.completed).length;
+    const progressPercentage = hasSubtasks ? (completedSubtasks / task.subtasks.length) * 100 : 0;
 
-  const getIndentClass = () => {
-    switch (level) {
-      case 0: return "pl-0";
-      case 1: return "pl-6";
-      case 2: return "pl-4";
-      default: return "pl-3";
-    }
-  };
+    return (
+      <div className={`group transition-all duration-300 ${depth > 0 ? 'ml-6' : ''}`}>
+        <div className={`relative rounded-xl p-4 mb-3 border transition-all duration-300 hover:shadow-lg hover:scale-[1.02] ${
+          isDark 
+            ? 'bg-gray-800/50 border-gray-700/50 hover:bg-gray-800/70 hover:border-gray-600/70' 
+            : 'bg-white/80 border-gray-200/50 hover:bg-white/90 hover:border-gray-300/70'
+        } ${task.completed ? 'opacity-75' : ''}`}>
+          
+          {/* Progress bar for tasks with subtasks */}
+          {hasSubtasks && (
+            <div className={`absolute top-0 left-0 h-1 rounded-t-xl transition-all duration-500 ${
+              isDark ? 'bg-gradient-to-r from-cyan-400 to-purple-400' : 'bg-gradient-to-r from-blue-500 to-purple-500'
+            }`} style={{ width: `${progressPercentage}%` }} />
+          )}
 
-  const getBulletColor = () => {
-    if (isDark) {
-      const darkColors = ["text-cyan-400", "text-emerald-400", "text-violet-400", "text-orange-400", "text-pink-400"];
-      return darkColors[level % darkColors.length];
-    } else {
-      const lightColors = ["text-blue-600", "text-emerald-600", "text-violet-600", "text-orange-600", "text-pink-600"];
-      return lightColors[level % lightColors.length];
-    }
-  };
+          <div className="flex items-center gap-3">
+            {/* Expand/Collapse button */}
+            {hasSubtasks && (
+              <button
+                onClick={() => onTasksUpdate(updateTask(task.id, { isExpanded: !task.isExpanded }))}
+                className={`p-1 rounded-lg transition-all duration-200 hover:scale-110 ${
+                  isDark ? 'hover:bg-gray-700/50 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                }`}
+              >
+                {task.isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              </button>
+            )}
 
-  const getHoverClass = () => {
-    return isDark ? "hover:bg-gray-800/50" : "hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50";
-  };
+            {/* Completion checkbox */}
+            <button
+              onClick={() => onTasksUpdate(updateTask(task.id, { completed: !task.completed }))}
+              className={`transition-all duration-200 hover:scale-110 ${
+                task.completed 
+                  ? (isDark ? 'text-cyan-400' : 'text-blue-500')
+                  : (isDark ? 'text-gray-500 hover:text-cyan-400' : 'text-gray-400 hover:text-blue-500')
+              }`}
+            >
+              {task.completed ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+            </button>
 
-  const getInputBg = () => {
-    return isDark ? "bg-gray-800 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300";
-  };
-
-  const getInputFocus = () => {
-    return isDark ? "focus:ring-cyan-500 focus:border-cyan-500" : "focus:ring-blue-500 focus:border-blue-500";
-  };
-
-  return (
-    <div className="space-y-3 w-full flex flex-col">
-      {localTasks.map((task, index) => (
-        <div key={index} className={`${getIndentClass()}`}>
-          <div className={`group flex items-start gap-4 p-4 rounded-xl ${getHoverClass()} transition-all duration-300 border ${isDark ? 'border-gray-700/50' : 'border-transparent hover:border-purple-200'}`}>
-            <div className={`w-3 h-3 rounded-full mt-2 flex-shrink-0 ${getBulletColor()} shadow-lg`} />
-            
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className={`font-medium leading-relaxed break-words ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
+            {/* Task title */}
+            <div className="flex-1">
+              {editingId === task.id ? (
+                <input
+                  type="text"
+                  value={editText}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditText(e.target.value)}
+                  onBlur={() => saveEdit(task.id)}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter') saveEdit(task.id);
+                    if (e.key === 'Escape') {
+                      setEditingId(null);
+                      setEditText('');
+                    }
+                  }}
+                  className={`w-full px-2 py-1 rounded-lg border-2 focus:outline-none transition-colors ${
+                    isDark 
+                      ? 'bg-gray-700 border-cyan-400/50 focus:border-cyan-400 text-white' 
+                      : 'bg-white border-blue-400/50 focus:border-blue-500 text-gray-900'
+                  }`}
+                  autoFocus
+                />
+              ) : (
+                <span 
+                  className={`text-lg font-medium transition-colors cursor-pointer hover:opacity-80 ${
+                    task.completed 
+                      ? `line-through ${isDark ? 'text-gray-500' : 'text-gray-400'}` 
+                      : (isDark ? 'text-gray-100' : 'text-gray-800')
+                  }`}
+                  onClick={() => startEditing(task)}
+                >
                   {task.title}
                 </span>
-                
-                <button
-                  onClick={() => handleAddSubtask(index)}
-                  className={`opacity-0 group-hover:opacity-100 flex items-center justify-center w-4 h-4 rounded-full transition-all duration-300 flex-shrink-0 ml-3 ${
-                    isDark 
-                      ? 'hover:bg-cyan-500/20 text-white-400 hover:text-cyan-300' 
-                      : 'hover:bg-blue-100 text-white-600 hover:text-green-700 hover:shadow-md'
-                  }`}
-                  title="Add Subtask"
-                >
-                  <Plus className="bg-white-500" size={18} />+
-                </button>
-              </div>
-
-              {inputVisible[index] && (
-                <div className={`mt-4 p-4 rounded-xl shadow-lg border ${
-                  isDark 
-                    ? 'bg-gray-800/80 border-gray-600 backdrop-blur-sm' 
-                    : 'bg-white/90 border-gray-200 backdrop-blur-sm'
-                }`}>
-                  <div className="flex gap-3">
-                    <input
-                      type="text"
-                      placeholder="Enter subtask title..."
-                      value={newSubtaskTitles[index] || ""}
-                      onChange={(e) => handleSubtaskChange(index, e.target.value)}
-                      onKeyDown={(e) => handleKeyPress(index, e)}
-                      className={`flex-1 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 ${getInputBg()} ${getInputFocus()}`}
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => handleSubmitSubtask(index)}
-                      disabled={!newSubtaskTitles[index]?.trim()}
-                      className="flex items-center justify-center w-11 h-11 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-lg transition-all duration-200 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105"
-                      title="Add subtask (Enter)"
-                    >
-                      Add
-                    </button>
-                    <button
-                      onClick={() => handleCancelSubtask(index)}
-                      className={`flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 ${
-                        isDark
-                          ? 'bg-gray-600 hover:bg-gray-500 text-gray-200'
-                          : 'bg-gray-400 hover:bg-gray-500 text-white'
-                      }`}
-                      title="Cancel (Esc)"
-                    >
-                     
-                    </button>
-                  </div>
-                  <p className={`text-xs mt-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Press <kbd className={`px-2 py-1 rounded text-xs font-mono ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>Enter</kbd> to add • Press <kbd className={`px-2 py-1 rounded text-xs font-mono ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>Esc</kbd> to cancel
-                  </p>
-                </div>
               )}
-
-              {task.subtasks && task.subtasks.length > 0 && (
-                <div className="mt-4">
-                  <ListComponent
-                    tasks={task.subtasks}
-                    level={level + 1}
-                    isDark={isDark}
-                    onTasksUpdate={(updatedSubtasks) => {
-                      const updated = [...localTasks];
-                      updated[index].subtasks = updatedSubtasks;
-                      setLocalTasks(updated);
-                      if (onTasksUpdate) onTasksUpdate(updated);
-                    }}
-                  />
+              
+              {/* Subtask progress indicator */}
+              {hasSubtasks && (
+                <div className={`mt-2 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {completedSubtasks}/{task.subtasks.length} subtasks completed
+                  <div className={`mt-1 w-full h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isDark ? 'bg-gradient-to-r from-cyan-400 to-purple-400' : 'bg-gradient-to-r from-blue-500 to-purple-500'
+                      }`}
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-1 opacity-100 transition-opacity duration-200">
+              <button
+                onClick={() => addSubtask(task.id)}
+                className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 ${
+                  isDark 
+                    ? 'hover:bg-gray-700/50 text-gray-400 hover:text-cyan-400' 
+                    : 'hover:bg-gray-100 text-gray-500 hover:text-blue-500'
+                }`}
+                title="Add subtask"
+              >
+                <Plus size={16} />
+              </button>
+              
+              <button
+                onClick={() => startEditing(task)}
+                className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 ${
+                  isDark 
+                    ? 'hover:bg-gray-700/50 text-gray-400 hover:text-yellow-400' 
+                    : 'hover:bg-gray-100 text-gray-500 hover:text-yellow-500'
+                }`}
+                title="Edit task"
+              >
+                <Edit3 size={16} />
+              </button>
+              
+              <button
+                onClick={() => deleteTask(task.id)}
+                className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 ${
+                  isDark 
+                    ? 'hover:bg-gray-700/50 text-gray-400 hover:text-red-400' 
+                    : 'hover:bg-gray-100 text-gray-500 hover:text-red-500'
+                }`}
+                title="Delete task"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Subtasks */}
+        {hasSubtasks && task.isExpanded && (
+          <div className="ml-4 space-y-2 animate-in slide-in-from-top-1 duration-300">
+            {task.subtasks.map(subtask => (
+              <TaskItem key={subtask.id} task={subtask} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const addNewTask = (): void => {
+    const newTask = {
+      id: generateId(),
+      title: 'New task',
+      completed: false,
+      subtasks: [],
+      isExpanded: false
+    };
+    onTasksUpdate([...tasks, newTask]);
+    setEditingId(newTask.id);
+    setEditText('New task');
+  };
+
+  return (
+    <div className="space-y-4">
+      {tasks.map(task => (
+        <TaskItem key={task.id} task={task} />
       ))}
+      
+      <button
+        onClick={addNewTask}
+        className={`w-full p-4 rounded-xl border-2 border-dashed transition-all duration-300 hover:scale-[1.02] group ${
+          isDark 
+            ? 'border-gray-600 hover:border-cyan-400/50 hover:bg-gray-800/30 text-gray-400 hover:text-cyan-400' 
+            : 'border-gray-300 hover:border-blue-400/50 hover:bg-blue-50/50 text-gray-500 hover:text-blue-500'
+        }`}
+      >
+        <div className="flex items-center justify-center gap-2">
+          <Plus size={20} className="transition-transform duration-200 group-hover:rotate-90" />
+          <span className="font-medium">Add New Task</span>
+        </div>
+      </button>
     </div>
   );
 };
