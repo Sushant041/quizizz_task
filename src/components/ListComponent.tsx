@@ -254,7 +254,7 @@ const ListComponent: React.FC<ListComponentProps> = ({ tasks, onTasksUpdate, isD
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-[600px]">
       {tasks.map(task => (
         <TaskItem key={task.id} task={task} />
       ))}

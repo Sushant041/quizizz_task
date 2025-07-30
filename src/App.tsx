@@ -170,7 +170,7 @@ const App: React.FC = () => {
 
           {/* Responsive ListComponent with Scroll */}
           <div className="w-full max-w-full overflow-x-hidden">
-            <div className="max-h-[70vh] overflow-auto">
+            <div className="overflow-auto">
               <ListComponent 
                 tasks={tasks} 
                 onTasksUpdate={setTasks}
